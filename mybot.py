@@ -27,4 +27,4 @@ def main():
     updater.idle()
 
 if _name_ == '_main_':
-    main()
+ main()
