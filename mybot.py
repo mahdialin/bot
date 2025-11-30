@@ -1,17 +1,17 @@
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 import os
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 def start(update: Update, context: CallbackContext):
-    # می‌گیم که منتظر مبلغ هستیم
+    # مرحله اول → منتظر مبلغ هستیم
     context.user_data["waiting_for_amount"] = True
 
     update.message.reply_text(
-        "سلام 👋\nلطفاً مبلغت رو بفرست (فعلاً فقط عدد)."
+        "سلام 👋\nلطفاً مبلغت رو بفرست (فعلاً فقط عدد).",
+        reply_markup=ReplyKeyboardRemove()  # 👈 این خط کیبورد قبلی رو می‌بنده
     )
-
 def handle_message(update: Update, context: CallbackContext):
     text = update.message.text
 
@@ -59,4 +59,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
