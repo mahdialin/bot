@@ -1,7 +1,6 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# توکن ربات خودتون رو اینجا قرار بدید
 TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
 
 # تابع start که با دکمه‌ها کار می‌کند
@@ -58,38 +57,44 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("سایر", callback_data="expense_other")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         await update.message.reply_text(
-            f"✔ مبلغ {amount} ریال ثبت شد.\nلطفاً نوع خرج را انتخاب کنید:",
+            f"مبلغ ثبت‌شده: {amount} ریال. لطفاً نوع خرج را انتخاب کنید:",
             reply_markup=reply_markup
         )
+        # تغییر حالت به انتظار انتخاب نوع خرج
+        context.user_data['state'] = 'WAIT_CATEGORY'
 
-        # پاک کردن حالت
-        context.user_data['state'] = None
-
-# مدیریت کلیک روی دکمه‌های خرج
-async def handle_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# تابع برای پردازش انتخاب نوع خرج
+async def process_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()  # پاسخ به درخواست
+    category = query.data  # داده مربوط به دکمه کلیک شده
 
-    # مشخص کردن نوع خرج
-    expense_type = query.data.split('_')[1]  # مثلاً "food", "transport", "home" و غیره
-
-    # ارسال پیام تأیید
-    await query.edit_message_text(text=f"✔ خرج {expense_type} ثبت شد.")
+    # ارسال تایید ثبت خرج
+    await query.answer()  # این خط برای پاسخ به کلیک روی دکمه ضروری است
+    await query.edit_message_text(
+        f"ثبت {category} به عنوان خرج انجام شد. همه چیز تمام است."
+    )
 
     # پاک کردن دکمه‌ها
     keyboard = []
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.message.edit_reply_markup(reply_markup=reply_markup)
 
-# ایجاد اپلیکیشن
-app = ApplicationBuilder().token(TOKEN).build()
+    # تغییر حالت به حالت اولیه
+    context.user_data['state'] = 'START'
 
-# اضافه کردن هدلرها
-app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-app.add_handler(CallbackQueryHandler(handle_expense))
+# تابع اصلی
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
 
-# راه‌اندازی ربات
-app.run_polling()
+    # ثبت handlerها
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(expense, pattern="^expense$"))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CallbackQueryHandler(process_expense, pattern="^(expense_food|expense_transport|expense_home|expense_fun|expense_other)$"))
+
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
