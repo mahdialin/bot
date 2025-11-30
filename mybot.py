@@ -1,23 +1,23 @@
 import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-import requests
-
-TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # باید = https://bot-production-c6b1.up.railway.app/webhook باشد
-
-# -----------------------------
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ساخت دکمه‌ها
     keyboard = [
         [InlineKeyboardButton("دریافت اطلاعات", callback_data="get_info")]
     ]
+    
+    # ایجاد یک صفحه کلید Inline
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # ارسال پیام با دکمه‌ها
     await update.message.reply_text(
         "سلام! 👋\nروی دکمه زیر بزن:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=reply_markup
     )
 
-# -----------------------------
+# برای استفاده از این کد، باید تابع start رو به همین شکل در کد خود بگنجونید
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -50,3 +50,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
