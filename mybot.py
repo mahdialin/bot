@@ -2,20 +2,30 @@ import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
+# جایگزین توکن ربات خود
+TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
+
+# تابع start که با دکمه‌ها کار می‌کند
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # ساخت دکمه‌ها
     keyboard = [
         [InlineKeyboardButton("دریافت اطلاعات", callback_data="get_info")]
     ]
     
-    # ایجاد یک صفحه کلید Inline
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # ارسال پیام با دکمه‌ها
     await update.message.reply_text(
         "سلام! 👋\nروی دکمه زیر بزن:",
         reply_markup=reply_markup
     )
+
+# ساخت و راه‌اندازی اپلیکیشن
+app = ApplicationBuilder().token(TOKEN).build()
+
+# تنظیمات هدلرها
+app.add_handler(CommandHandler("start", start))
+
+# راه‌اندازی و اجرای اپلیکیشن
+app.run_polling()
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -48,5 +58,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
