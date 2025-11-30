@@ -1,19 +1,18 @@
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
-    ApplicationBuilder, 
-    CommandHandler, 
-    MessageHandler, 
-    ContextTypes, 
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
     filters
 )
 import os
-import re
 import requests
+import re
 
-
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
-N8N_URL = os.environ.get("N8N_WEBHOOK_URL")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+N8N_URL = os.getenv("N8N_WEBHOOK_URL")
 
 
 def convert_fa_numbers(text):
@@ -41,24 +40,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         raw = convert_fa_numbers(text)
 
         if "ریال" not in raw:
-            await update.message.reply_text("❗ لطفاً مبلغ را همراه کلمه «ریال» بفرست.")
+            await update.message.reply_text("❗ لطفاً مبلغ + کلمه «ریال» را بفرست.")
             return
 
         parts = raw.split("ریال")
         amount_text = parts[0].strip()
-        after_amount = parts[1].strip()
+        after = parts[1].strip()
 
-        # مبلغ
         nums = re.findall(r"\d+", amount_text)
         if not nums:
-            await update.message.reply_text("❗ مبلغ درست تشخیص داده نشد.")
+            await update.message.reply_text("❗ مبلغ تشخیص داده نشد.")
             return
 
         amount = int(nums[0])
-        words = after_amount.split()
+        words = after.split()
 
         if len(words) < 2:
-            await update.message.reply_text("❗ لطفاً عنوان و حساب را هم بفرست.")
+            await update.message.reply_text("❗ باید عنوان + حساب را بفرستی.")
             return
 
         if len(words) >= 3:
@@ -91,7 +89,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "💰 ریز خرج‌کرد روزانه":
         context.user_data["state"] = "WAIT_EXPENSE"
         await update.message.reply_text(
-            "مبلغ + ریال + عنوان + حساب را بفرست.",
+            "فرمت: مبلغ + ریال + عنوان + حساب",
             reply_markup=ReplyKeyboardRemove()
         )
 
@@ -99,17 +97,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    # handler ها
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # درست‌ترین حالت برای Railway
+    # فقط همین!  
+    # Railway خودش مدیریت می‌کنه — run_webhook حذف شد
     await app.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
-
-    await app.run_webhook(
-        listen="0.0.0.0",
-        port=8080,
-        url_path="webhook"
-    )
 
 
 if __name__ == "__main__":
