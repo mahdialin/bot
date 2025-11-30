@@ -5,13 +5,12 @@ import os
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 def start(update: Update, context: CallbackContext):
-    # مرحله اول → منتظر مبلغ هستیم
-    context.user_data["waiting_for_amount"] = True
-
-    update.message.reply_text(
-        "سلام 👋\nلطفاً مبلغت رو بفرست (فعلاً فقط عدد).",
-        reply_markup=ReplyKeyboardRemove()  # 👈 این خط کیبورد قبلی رو می‌بنده
-    )
+    keyboard = [
+        ["💰 ریز خرج‌کرد روزانه"]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    update.message.reply_text("یک گزینه را انتخاب کنید:", reply_markup=reply_markup)
+    
 def handle_message(update: Update, context: CallbackContext):
     text = update.message.text
 
@@ -59,5 +58,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
