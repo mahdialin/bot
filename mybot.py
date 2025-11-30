@@ -86,6 +86,15 @@ def handle_message(update: Update, context: CallbackContext):
             reply_markup=ReplyKeyboardRemove()
         )
         return
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+import os
+
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
+WEBHOOK_URL = "https://n8n-production-1119.up.railway.app/webhook/88c3c5d3-4ed9-4b27-bfa2-7cac001be867"
+PORT = int(os.environ.get("PORT", 8443))
+
 def main():
     updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
@@ -93,11 +102,19 @@ def main():
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 
-    updater.start_polling()
+    # Webhook mode
+    updater.start_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path="",
+        webhook_url=WEBHOOK_URL
+    )
+
     updater.idle()
 
 if __name__ == "__main__":
     main()
+
 
 
 
