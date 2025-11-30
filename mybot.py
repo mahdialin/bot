@@ -7,8 +7,8 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 def start(update: Update, context: CallbackContext):
     keyboard = [
         ["💰 ریز خرج‌کرد روزانه"],
-        ["گزینه ۲", "گزینه ۳"],
-        ["گزینه ۴", "گزینه ۵"]
+        ["فروش روزانه", "حقوق"],
+        ["برداشت", "موجوی صندوق"]
     ]
 
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -94,6 +94,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
