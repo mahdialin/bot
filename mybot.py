@@ -2,7 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 # توکن ربات خودتون رو اینجا قرار بدید
-TOKEN = "توکن_ربات_شما"
+TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
 
 # تابع start که با دکمه‌ها کار می‌کند
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -93,3 +93,4 @@ app.add_handler(CallbackQueryHandler(handle_expense))
 
 # راه‌اندازی ربات
 app.run_polling()
+
