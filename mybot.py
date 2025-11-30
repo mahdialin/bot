@@ -1,63 +1,91 @@
-import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# جایگزین توکن ربات خود
+# توکن ربات خودت رو اینجا قرار بده
 TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
 
-# تابع start که با دکمه‌ها کار می‌کند
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # دکمه‌های اصلی
     keyboard = [
-        [InlineKeyboardButton("دریافت اطلاعات", callback_data="get_info")]
+        ["💰 ریز خرج‌کرد روزانه"],  # دکمه برای ریز خرج روزانه
+        ["۲", "۳", "۴", "۵"]         # سایر دکمه‌های اختیاری
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
-        "سلام! 👋\nروی دکمه زیر بزن:",
+        "سلام! 👋\nلطفاً یک گزینه را انتخاب کنید:",
         reply_markup=reply_markup
     )
 
-# ساخت و راه‌اندازی اپلیکیشن
+# تابع برای مدیریت وضعیت وقتی کاربر "💰 ریز خرج‌کرد روزانه" رو انتخاب می‌کنه
+async def expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # حذف دکمه‌های قبلی و نمایش پیام برای ارسال مبلغ
+    keyboard = []
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(
+        "لطفاً مبلغ را همراه با کلمه «ریال» بفرستید (مثال: ۲۰۰۰۰ ریال).",
+        reply_markup=reply_markup
+    )
+    
+    # تغییر حالت به انتظار دریافت مبلغ
+    context.user_data['state'] = 'WAIT_EXPENSE'
+
+# تابع برای دریافت مبلغ و ارسال دکمه‌های جدید
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+
+    if context.user_data.get('state') == 'WAIT_EXPENSE':
+        # حذف ریال و دریافت مقدار عددی
+        amount_text = text.replace("ریال", "").strip()
+        try:
+            amount = int(amount_text)
+        except ValueError:
+            await update.message.reply_text("❗ مبلغ صحیح وارد نشده. لطفاً دوباره امتحان کنید.")
+            return
+        
+        # بعد از دریافت مبلغ، نمایش دکمه‌های جدید
+        keyboard = [
+            [InlineKeyboardButton("خوراک", callback_data="expense_food")],
+            [InlineKeyboardButton("رفت‌وآمد", callback_data="expense_transport")],
+            [InlineKeyboardButton("خانه", callback_data="expense_home")],
+            [InlineKeyboardButton("تفریح", callback_data="expense_fun")],
+            [InlineKeyboardButton("سایر", callback_data="expense_other")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            f"✔ مبلغ {amount} ریال ثبت شد.\nلطفاً نوع خرج را انتخاب کنید:",
+            reply_markup=reply_markup
+        )
+
+        # پاک کردن حالت
+        context.user_data['state'] = None
+
+# مدیریت کلیک روی دکمه‌های خرج
+async def handle_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()  # پاسخ به درخواست
+
+    # مشخص کردن نوع خرج
+    expense_type = query.data.split('_')[1]  # مثلاً "food", "transport", "home" و غیره
+
+    # ارسال پیام تأیید
+    await query.edit_message_text(text=f"✔ خرج {expense_type} ثبت شد.")
+
+    # پاک کردن دکمه‌ها
+    keyboard = []
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.message.edit_reply_markup(reply_markup=reply_markup)
+
+# ایجاد اپلیکیشن
 app = ApplicationBuilder().token(TOKEN).build()
 
-# تنظیمات هدلرها
+# اضافه کردن هدلرها
 app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+app.add_handler(CallbackQueryHandler(handle_expense))
 
-# راه‌اندازی و اجرای اپلیکیشن
+# راه‌اندازی ربات
 app.run_polling()
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    data = {"user_id": query.from_user.id, "action": query.data}
-    requests.post(WEBHOOK_URL, json=data)
-
-    await query.edit_message_text("درخواست ارسال شد ✔")
-
-# -----------------------------
-
-async def webhook(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return
-
-# -----------------------------
-
-def main():
-    app = Application.builder().token(TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button_handler))
-
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=8000,
-        url_path="webhook",
-        webhook_url=WEBHOOK_URL
-    )
-
-if __name__ == "__main__":
-    main()
-
-
-
