@@ -1,56 +1,62 @@
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 import os
 import re
+import requests
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL")  # از Railway میاره
+N8N_WEBHOOK_URL = os.environ.get("N8N_WEBHOOK_URL")
+PORT = int(os.environ.get("PORT", 8080))  # پورت Railway
 
-def start(update: Update, context: CallbackContext):
+# -----------------------------
+# شروع
+# -----------------------------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         ["💰 ریز خرج‌کرد روزانه"],
         ["فروش روزانه", "حقوق"],
         ["برداشت", "موجوی صندوق"]
     ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    update.message.reply_text("یک گزینه را انتخاب کنید:", reply_markup=reply_markup)
+    await update.message.reply_text(
+        "یک گزینه را انتخاب کنید:",
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    )
 
+# -----------------------------
+# تبدیل اعداد فارسی
+# -----------------------------
 def convert_fa_numbers(text):
     fa = "۰۱۲۳۴۵۶۷۸۹"
     en = "0123456789"
-    table = str.maketrans(fa, en)
-    return text.translate(table)
+    return text.translate(str.maketrans(fa, en))
 
-def handle_message(update: Update, context: CallbackContext):
+# -----------------------------
+# هندل پیام
+# -----------------------------
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
-    # اگر وارد حالت ریز خرج‌کرد شدیم
     if context.user_data.get("state") == "WAIT_EXPENSE":
-
         raw = convert_fa_numbers(text)
 
-        # 1) مبلغ تا قبل از کلمه "ریال"
         if "ریال" not in raw:
-            update.message.reply_text("❗ لطفاً مبلغ را همراه کلمه «ریال» بفرست.")
+            await update.message.reply_text("❗ لطفاً مبلغ را همراه «ریال» بفرست.")
             return
 
         parts = raw.split("ریال")
         amount_text = parts[0].strip()
         after_amount = parts[1].strip()
 
-        # مبلغ را از پیام جدا کنیم (فقط عدد)
-        amount_numbers = re.findall(r"\d+", amount_text)
-        if not amount_numbers:
-            update.message.reply_text("❗ مبلغ درست تشخیص داده نشد.")
+        numbers = re.findall(r"\d+", amount_text)
+        if not numbers:
+            await update.message.reply_text("❗ مبلغ درست تشخیص داده نشد.")
             return
 
-        amount = int(amount_numbers[0])
-
-        # 2) حساب و عنوان
+        amount = int(numbers[0])
         words = after_amount.split()
 
         if len(words) < 2:
-            update.message.reply_text("❗ لطفاً بعد از مبلغ، عنوان و حساب را هم بفرست.")
+            await update.message.reply_text("❗ عنوان و حساب را هم وارد کن.")
             return
 
         if len(words) >= 3:
@@ -60,64 +66,51 @@ def handle_message(update: Update, context: CallbackContext):
             account = words[-1]
             title = " ".join(words[:-1])
 
-        # پیام به کاربر
-        update.message.reply_text(
-            f"✔ ثبت شد\n\n"
-            f"مبلغ: {amount}\n"
-            f"عنوان: {title}\n"
-            f"حساب: {account}",
+        await update.message.reply_text(
+            f"✔ ثبت شد\n\nمبلغ: {amount}\nعنوان: {title}\nحساب: {account}",
             reply_markup=ReplyKeyboardRemove()
         )
 
-        # ------------------------------
-        # ارسال داده‌ها به n8n (Webhook)
-        # ------------------------------
-        import requests
-        webhook_url = os.environ.get("N8N_WEBHOOK_URL")
-
         try:
-            requests.post(webhook_url, json={
+            requests.post(N8N_WEBHOOK_URL, json={
                 "amount": amount,
                 "title": title,
                 "account": account
             })
         except Exception as e:
-            print("❗ خطا در ارسال به n8n:", e)
+            print("Error sending to n8n:", e)
 
-        # پاک کردن state
         context.user_data.clear()
         return
 
-    # وقتی روی دکمه ریز خرج‌کرد کلیک میشه
     if text == "💰 ریز خرج‌کرد روزانه":
         context.user_data["state"] = "WAIT_EXPENSE"
-        update.message.reply_text(
-            "لطفاً مبلغ + ریال + عنوان + حساب را بفرست یا ویس بده.\n"
-            "مثال: «۲۰۰۰۰ ریال اسنپ ملت مهدی»",
+        await update.message.reply_text(
+            "مبلغ + ریال + عنوان + حساب را بفرست.\nمثال:\n«۲۰۰۰۰ ریال اسنپ ملت مهدی»",
             reply_markup=ReplyKeyboardRemove()
         )
         return
 
-def main():
-    bot_token = os.environ.get("BOT_TOKEN")
-    webhook_url = os.environ.get("N8N_WEBHOOK_URL")
+# -----------------------------
+# اصلی
+# -----------------------------
+async def main():
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    updater = Updater(bot_token, use_context=True)
-    dp = updater.dispatcher
-    
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-    updater.start_webhook(
+    # ---- کاملاً درست ----
+    await application.start_webhook(
         listen="0.0.0.0",
-        port=8080,
-        url_path="webhook",
-        webhook_url=webhook_url
+        port=PORT,
+        url_path=N8N_WEBHOOK_URL.split("/")[-1],  # فقط UUID
+        webhook_url=N8N_WEBHOOK_URL,
     )
 
-    updater.idle()
+    await application.updater.start_polling()
+    await application.idle()
 
 if __name__ == "__main__":
-    main()
-
-
+    import asyncio
+    asyncio.run(main())
