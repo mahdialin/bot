@@ -99,22 +99,25 @@ def handle_message(update: Update, context: CallbackContext):
         return
 
 def main():
-    updater = Updater(BOT_TOKEN, use_context=True)
+    bot_token = os.environ.get("BOT_TOKEN")
+    webhook_url = os.environ.get("N8N_WEBHOOK_URL")
 
-    # ست کردن وبهوک روی Railway
+    updater = Updater(bot_token, use_context=True)
+    dp = updater.dispatcher
+    
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+
     updater.start_webhook(
         listen="0.0.0.0",
         port=8080,
-        url_path=BOT_TOKEN,
-        webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
+        url_path="webhook",
+        webhook_url=webhook_url
     )
-
-    dp = updater.dispatcher
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 
     updater.idle()
 
 if __name__ == "__main__":
     main()
+
 
