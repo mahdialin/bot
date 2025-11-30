@@ -1,103 +1,69 @@
 import os
-import re
-import requests
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
+    CallbackContext,
+    CallbackQueryHandler,
     MessageHandler,
-    ContextTypes,
     filters,
 )
+import logging
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-N8N_WEBHOOK_URL = os.environ.get("N8N_WEBHOOK_URL")
+# Logging
+logging.basicConfig(level=logging.INFO)
 
-def convert_fa_numbers(text):
-    fa = "۰۱۲۳۴۵۶۷۸۹"
-    en = "0123456789"
-    return text.translate(str.maketrans(fa, en))
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ---------------------- Handlers ----------------------
+
+async def start(update: Update, context: CallbackContext):
     keyboard = [
-        ["💰 ریز خرج‌کرد روزانه"],
-        ["فروش روزانه", "حقوق"],
-        ["برداشت", "موجودی صندوق"],
+        [InlineKeyboardButton("ارسال پیام", callback_data="send_message")]
     ]
-    await update.message.reply_text(
-        "یک گزینه را انتخاب کنید:",
-        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    )
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text("سلام! یکی از گزینه‌ها را انتخاب کن:", reply_markup=reply_markup)
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
+async def button_handler(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer()
 
-    if text == "💰 ریز خرج‌کرد روزانه":
-        context.user_data["state"] = "WAIT_EXPENSE"
-        await update.message.reply_text(
-            "مبلغ + ریال + عنوان + حساب را بفرست.\nمثال: ۲۰۰۰۰ ریال اسنپ ملت مهدی",
-            reply_markup=ReplyKeyboardRemove()
-        )
-        return
+    if query.data == "send_message":
+        await query.message.reply_text("پیام خود را ارسال کنید:")
+        context.user_data["expecting_message"] = True
 
-    if context.user_data.get("state") == "WAIT_EXPENSE":
+async def receive_message(update: Update, context: CallbackContext):
+    if context.user_data.get("expecting_message"):
+        text = update.message.text
+        context.user_data["expecting_message"] = False
 
-        raw = convert_fa_numbers(text)
-
-        if "ریال" not in raw:
-            await update.message.reply_text("❗ لطفاً مبلغ را همراه «ریال» ارسال کنید.")
-            return
-
-        amount_text, after_amount = raw.split("ریال")
-        nums = re.findall(r"\d+", amount_text)
-        if not nums:
-            await update.message.reply_text("❗ مبلغ تشخیص داده نشد.")
-            return
-
-        amount = int(nums[0])
-        words = after_amount.strip().split()
-
-        if len(words) < 2:
-            await update.message.reply_text("❗ عنوان و حساب کامل نیست.")
-            return
-
-        if len(words) >= 3:
-            account = " ".join(words[-2:])
-            title = " ".join(words[:-2])
-        else:
-            account = words[-1]
-            title = " ".join(words[:-1])
-
-        await update.message.reply_text(
-            f"✔ ثبت شد:\n\nمبلغ: {amount}\nعنوان: {title}\nحساب: {account}",
-            reply_markup=ReplyKeyboardRemove()
-        )
-
+        # ارسال به n8n
+        import requests
         try:
-            requests.post(N8N_WEBHOOK_URL, json={
-                "amount": amount,
-                "title": title,
-                "account": account
-            })
+            requests.post(N8N_WEBHOOK_URL, json={"message": text})
         except Exception as e:
-            print("خطای ارسال به n8n:", e)
+            print("Error sending to n8n:", e)
 
-        context.user_data.clear()
+        await update.message.reply_text("پیام شما ارسال شد!")
 
+# ---------------------- Main ----------------------      
 
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_message))
 
+    # ---- IMPORTANT ----
+    # نسخه درست شده بدون webhook_url
     await app.run_webhook(
         listen="0.0.0.0",
         port=8080,
-        url_path="telegram",
-        webhook_url=N8N_WEBHOOK_URL,
+        url_path="telegram"
     )
-
 
 if __name__ == "__main__":
     import asyncio
