@@ -33,14 +33,17 @@ def handle_message(update: Update, context: CallbackContext):
     if context.user_data.get("state") == "WAIT_EXPENSE":
         raw = convert_fa_numbers(text)
 
+        # 1) مبلغ تا قبل از کلمه "ریال"
         if "ریال" not in raw:
             update.message.reply_text("❗ لطفاً مبلغ را همراه کلمه «ریال» بفرست.")
             return
 
         parts = raw.split("ریال")
-        amount_text = parts[0].strip()
-        after_amount = parts[1].strip()
+        amount_text = parts[0].strip()          # قبل از ریال
+        after_amount = parts[1].strip()         # بعد از ریال (عنوان + حساب)
 
+        # مبلغ فقط عدد
+        import re
         amount_numbers = re.findall(r"\d+", amount_text)
         if not amount_numbers:
             update.message.reply_text("❗ مبلغ درست تشخیص داده نشد.")
@@ -48,6 +51,7 @@ def handle_message(update: Update, context: CallbackContext):
 
         amount = int(amount_numbers[0])
 
+        # 2) حساب + عنوان
         words = after_amount.split()
 
         if len(words) < 2:
@@ -61,16 +65,26 @@ def handle_message(update: Update, context: CallbackContext):
             account = words[-1]
             title = " ".join(words[:-1])
 
-        # ارسال اطلاعات به n8n Webhook
+        # -------------------------
+        # ارسال داده‌ها به n8n
+        # -------------------------
+        import requests
         webhook_url = os.environ.get("N8N_WEBHOOK_URL")
-        if webhook_url:
-            requests.post(webhook_url, json={
-                "amount": amount,
-                "title": title,
-                "account": account,
-                "user": update.message.from_user.username
-            })
 
+        data = {
+            "amount": amount,
+            "title": title,
+            "account": account,
+            "user_id": update.message.from_user.id,
+            "raw_text": text
+        }
+
+        try:
+            requests.post(webhook_url, json=data, timeout=3)
+        except:
+            pass
+
+        # پاسخ نهایی تلگرام
         update.message.reply_text(
             f"✔ ثبت شد\n\n"
             f"مبلغ: {amount}\n"
@@ -82,17 +96,15 @@ def handle_message(update: Update, context: CallbackContext):
         context.user_data.clear()
         return
 
-    # وقتی روی دکمه ریز خرج‌کرد کلیک می‌شود
+    # دکمه ریز خرج‌کرد
     if text == "💰 ریز خرج‌کرد روزانه":
         context.user_data["state"] = "WAIT_EXPENSE"
         update.message.reply_text(
-            "لطفاً مبلغ + ریال + عنوان + حساب را بفرست.\n"
+            "لطفاً مبلغ + ریال + عنوان + حساب را بفرست یا ویس بده.\n"
             "مثال: «۲۰۰۰۰ ریال اسنپ ملت مهدی»",
             reply_markup=ReplyKeyboardRemove()
         )
         return
-
-# تابع اصلی
 def main():
     updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
@@ -105,3 +117,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
