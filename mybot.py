@@ -93,4 +93,3 @@ app.add_handler(CallbackQueryHandler(handle_expense))
 
 # راه‌اندازی ربات
 app.run_polling()
-
