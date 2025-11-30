@@ -1,9 +1,10 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, ContextTypes
 
-TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
+# توکن ربات
+TOKEN = '7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04'  # جایگزین کنید با توکن واقعی ربات
 
-# تابع start که با دکمه‌ها کار می‌کند
+# /start command handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # دکمه‌های اصلی
     keyboard = [
@@ -14,8 +15,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("۵", callback_data="5")]
     ]
     
+    # ارسال دکمه‌ها
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
     await update.message.reply_text(
         "سلام! 👋\nلطفاً یک گزینه را انتخاب کنید:",
         reply_markup=reply_markup
