@@ -2,7 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 # توکن ربات خودتون رو اینجا قرار بدید
-TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
+TOKEN = "توکن_ربات_شما"
 
 # تابع start که با دکمه‌ها کار می‌کند
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -15,7 +15,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("۵", callback_data="5")]
     ]
     
-    # نمایش دکمه‌ها
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
