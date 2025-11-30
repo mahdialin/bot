@@ -16,71 +16,75 @@ def start(update: Update, context: CallbackContext):
     update.message.reply_text("یک گزینه را انتخاب کنید:", reply_markup=reply_markup)
 
     
+import re
+
+def convert_fa_numbers(text):
+    fa = "۰۱۲۳۴۵۶۷۸۹"
+    en = "0123456789"
+    table = str.maketrans(fa, en)
+    return text.translate(table)
+
 def handle_message(update: Update, context: CallbackContext):
     text = update.message.text
-    state = context.user_data.get("state")
 
-    # =========================
-    # مرحله ۱: منوی اصلی
-    # =========================
-    if state is None:
-        # فقط اگر "ریز خرج‌کرد روزانه" را زد
-        if text == "💰 ریز خرج‌کرد روزانه":
-            # میریم به حالت گرفتن مبلغ
-            context.user_data["state"] = "WAIT_AMOUNT"
+    # اگر وارد حالت ریز خرج‌کرد شدیم
+    if context.user_data.get("state") == "WAIT_EXPENSE":
+        raw = convert_fa_numbers(text)
 
-            # دکمه‌های منوی اصلی را می‌بندیم
-            update.message.reply_text(
-                "لطفاً مبلغ رو به صورت عدد بفرست 💸 (مثلاً 120000)",
-                reply_markup=ReplyKeyboardRemove()
-            )
-        # اگر یکی از دکمه‌های ۲،۳،۴،۵ یا چیز دیگه زد، فعلاً کاری نکن
-        return
-
-    # =========================
-    # مرحله ۲: گرفتن مبلغ
-    # =========================
-    if state == "WAIT_AMOUNT":
-        amount = text.strip()
-
-        # چک ساده که شبیه عدد باشه
-        if not amount.replace(".", "", 1).isdigit():
-            update.message.reply_text("❗ لطفاً مبلغ رو فقط به صورت عدد بفرست (مثلاً 120000).")
+        # 1) مبلغ تا قبل از کلمه "ریال"
+        if "ریال" not in raw:
+            update.message.reply_text("❗ لطفاً مبلغ را همراه کلمه «ریال» بفرست.")
             return
 
-        # مبلغ رو ذخیره می‌کنیم
-        context.user_data["last_amount"] = amount
-        context.user_data["state"] = "WAIT_CATEGORY"
+        parts = raw.split("ریال")
+        amount_text = parts[0].strip()          # قبل از ریال
+        after_amount = parts[1].strip()         # بعد از ریال (عنوان + حساب)
 
-        # اینجا کیبوردِ جدید (۵ دکمه‌ی خرج) میاد
-        keyboard = [
-            ["🍔 خوراک", "🚕 رفت‌وآمد"],
-            ["🏠 خانه", "🎉 تفریح"],
-            ["💼 سایر"]
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        # مبلغ را از پیام جدا کنیم (فقط عدد)
+        amount_numbers = re.findall(r"\d+", amount_text)
+        if not amount_numbers:
+            update.message.reply_text("❗ مبلغ درست تشخیص داده نشد.")
+            return
 
+        amount = int(amount_numbers[0])
+
+        # 2) حساب = آخرین یک تا دو کلمه
+        words = after_amount.split()
+
+        if len(words) < 2:
+            update.message.reply_text("❗ لطفاً بعد از مبلغ، عنوان و حساب را هم بفرست.")
+            return
+
+        # حساب = آخرین 1 یا 2 یا 3 کلمه (انعطاف‌پذیر)
+        if len(words) >= 3:
+            # تشخیص هوشمند 2 کلمه آخری حساب
+            account = " ".join(words[-2:])
+            title = " ".join(words[:-2])
+        else:
+            account = words[-1]
+            title = " ".join(words[:-1])
+
+        # پاسخ نهایی
         update.message.reply_text(
-            f"مبلغ {amount} ثبت شد ✔️\nحالا نوع خرج رو انتخاب کن:",
-            reply_markup=reply_markup
+            f"✔ ثبت شد\n\n"
+            f"مبلغ: {amount}\n"
+            f"عنوان: {title}\n"
+            f"حساب: {account}",
+            reply_markup=ReplyKeyboardRemove()
         )
+
+        # پاک کردن state برای شروع جدید
+        context.user_data.clear()
         return
 
-    # =========================
-    # مرحله ۳: انتخاب دسته‌ی خرج
-    # =========================
-    if state == "WAIT_CATEGORY":
-        amount = context.user_data.get("last_amount")
-        category = text  # همون دکمه‌ای که زد
-
-        # اینجا بعداً می‌فرستیمش n8n/اکسل، فعلاً فقط تأیید می‌کنیم
+    # وقتی روی دکمه ریز خرج‌کرد کلیک میشه
+    if text == "💰 ریز خرج‌کرد روزانه":
+        context.user_data["state"] = "WAIT_EXPENSE"
         update.message.reply_text(
-            f"✅ خرج {amount} در دسته «{category}» ثبت شد.",
-            reply_markup=ReplyKeyboardRemove()  # دکمه‌ها هم می‌رن
+            "لطفاً مبلغ + ریال + عنوان + حساب را بفرست یا ویس بده.\n"
+            "مثال: «۲۰۰۰۰ ریال اسنپ ملت مهدی»",
+            reply_markup=ReplyKeyboardRemove()
         )
-
-        # همه‌چیز ریست می‌شه؛ برای شروع دوباره باید /start بزنه
-        context.user_data.clear()
         return
 def main():
     updater = Updater(BOT_TOKEN, use_context=True)
@@ -94,6 +98,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
