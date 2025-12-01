@@ -54,10 +54,11 @@ def main():
     app.run_webhook(
         listen="0.0.0.0",
         port=8080,
-        url_path="",                  # خالی بگذار
+        url_path="webhook",                  # خالی بگذار
         webhook_url=WEBHOOK_URL       # مهم! اشتباه نکن
     )
 
 
 if __name__ == "__main__":
     main()
+
