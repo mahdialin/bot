@@ -1,25 +1,23 @@
+import os
 import logging
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
-    ContextTypes,
     CommandHandler,
     MessageHandler,
+    ContextTypes,
     filters
 )
-import os
 
 TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
-WEBHOOK_BASE = "https://bot-production-c6b1.up.railway.app"   # بدون /webhook
-WEBHOOK_URL = f"{WEBHOOK_BASE}/webhook"
+WEBHOOK_PATH = "webhook"
+WEBHOOK_URL = f"https://bot-production-c6b1.up.railway.app/{WEBHOOK_PATH}"
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+PORT = int(os.environ.get("PORT", 8080))
+
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ------------------ دکمه‌ها ------------------
 keyboard = ReplyKeyboardMarkup(
     [
         ["💸 ریز خرج کرد روزانه"],
@@ -31,35 +29,34 @@ keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# ------------------ start ------------------
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("یکی را انتخاب کنید:", reply_markup=keyboard)
 
-# ------------------ message ------------------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("یکی از گزینه‌ها را انتخاب کنید:", reply_markup=keyboard)
+
+
 async def forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"پیام دریافت شد: {update.message.text}")
 
-# ------------------ main ------------------
+
 async def post_init(app):
     await app.bot.set_webhook(WEBHOOK_URL)
 
-def main():
-    PORT = int(os.getenv("PORT", "8080"))  # ✔ مطابق Railway
 
+def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward))
 
-    app.post_init = post_init  # ✔ فقط یک بار وب‌هوک ست می‌شود
+    app.post_init = post_init
 
-    # ✔ پورت درست  
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        url_path="webhook",
-        webhook_url=WEBHOOK_URL
+        url_path=WEBHOOK_PATH,
+        webhook_url=WEBHOOK_URL,
     )
+
 
 if __name__ == "__main__":
     main()
