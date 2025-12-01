@@ -4,9 +4,7 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
 TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
-
-# چون Railway ریشه '/' را اجرا می‌کند، پس فقط دامنه را می‌دهیم
-WEBHOOK_URL = "https://bot-production-c6bl.up.railway.app"
+WEBHOOK_URL = "https://bot-production-c6bl.up.railway.app"     # مهم! بدون /webhook
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -14,56 +12,50 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+N8N_URL = "https://n8n-production-4e00.up.railway.app/webhook/telegram"
 
-# -----------------------  /start  -----------------------
+
+# /start → دکمه‌ها
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         ["💸 ریز خرج کرد روزانه"],
-        ["۲"],
-        ["۳"],
-        ["۴"],
-        ["۵"]
+        ["۲"], ["۳"], ["۴"], ["۵"]
     ]
-
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-    await update.message.reply_text(
-        "لطفاً یک گزینه را انتخاب کنید:",
-        reply_markup=reply_markup
-    )
+    await update.message.reply_text("لطفاً یک گزینه را انتخاب کنید:", reply_markup=reply_markup)
 
 
-# -------------------- Forward to N8N --------------------
+# هر پیام → به n8n
 async def forward_to_n8n(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     payload = {
         "user_id": update.message.from_user.id,
         "username": update.message.from_user.username,
-        "text": update.message.text,
+        "text": update.message.text
     }
-
-    # ارسال پیام به n8n
     try:
-        requests.post("https://n8n-production-4e00.up.railway.app/webhook/telegram", json=payload)
+        requests.post(N8N_URL, json=payload)
     except Exception as e:
-        logger.error(f"N8N ERROR: {e}")
+        logger.error(f"Error sending to N8N: {e}")
 
 
-# ------------------------- MAIN -------------------------
+# تنظیم وبهوک
+async def set_webhook(app):
+    await app.bot.set_webhook(url=WEBHOOK_URL)
+
+
 def main():
-
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # هندلر ها
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_n8n))
 
-    # 🚀 ست کردن وبهوک فقط یک بار
+    app.post_init = set_webhook
+
     app.run_webhook(
         listen="0.0.0.0",
         port=8080,
-        url_path="",              # ربات روی مسیر "/" اجرا می‌شود
-        webhook_url=WEBHOOK_URL   # اینو به تلگرام اعلام می‌کنیم
+        url_path="",                  # خالی بگذار
+        webhook_url=WEBHOOK_URL       # مهم! اشتباه نکن
     )
 
 
