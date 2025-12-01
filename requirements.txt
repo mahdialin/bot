@@ -2,3 +2,4 @@ python-telegram-bot[webhooks]==20.6
 requests
 pandas
 openpyxl
+pip install SpeechRecognition
