@@ -1,83 +1,74 @@
 import logging
+import requests
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-import pandas as pd
-from datetime import datetime
-from io import BytesIO
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
-# تنظیمات لاگ
+TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
+WEBHOOK_URL = "https://n8n-production-4e00.up.railway.app/webhook/telegram"
+
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# اینجا توکن واقعی رباتت را بگذار
-TOKEN = 'توکن_ربات_خودت'
+# -----------------------------
+#   /start command + buttons
+# -----------------------------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        ["💸 ریز خرج کرد روزانه"],
+        ["۲"], 
+        ["۳"],
+        ["۴"],
+        ["۵"]
+    ]
 
-# ساختار داده‌ها برای اکسل
-data = {
-    "تاریخ": [],
-    "عنوان": [],
-    "مبلغ (ریال)": [],
-    "حساب": []
-}
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def main_keyboard():
-    return ReplyKeyboardMarkup(
-        [
-            ['ریز خرج کرد روزانه'],
-            ['فروش روزانه'],
-            ['حساب باز'],
-            ['گزینه ۴'],
-            ['گزینه ۵'],
-        ],
-        resize_keyboard=True
+    await update.message.reply_text(
+        "لطفاً یک گزینه را انتخاب کنید:",
+        reply_markup=reply_markup
     )
 
-def category_keyboard():
-    return ReplyKeyboardMarkup(
-        [
-            ['اسنپ'],
-            ['حقوق'],
-            ['خرید روزمره'],
-            ['کرایه'],
-            ['سایر'],
-        ],
-        resize_keyboard=True,
-        one_time_keyboard=True
-    )
+# -----------------------------
+#   Send every message to N8N
+# -----------------------------
+async def forward_to_n8n(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        payload = {
+            "user_id": update.message.from_user.id,
+            "username": update.message.from_user.username,
+            "text": update.message.text,
+        }
 
-def save_to_excel():
-    df = pd.DataFrame(data)
-    excel_file = BytesIO()
-    df.to_excel(excel_file, index=False, engine='openpyxl')
-    excel_file.seek(0)
-    return excel_file
+        # ارسال داده به N8N
+        requests.post(WEBHOOK_URL, json=payload)
 
-def start(update: Update, context: CallbackContext):
-    # ریست وضعیت کاربر
-    context.user_data.clear()
-    update.message.reply_text(
-        "سلام 👋\nیک گزینه را انتخاب کنید:",
-        reply_markup=main_keyboard()
-    )
+    except Exception as e:
+        logger.error(f"Error sending to N8N: {e}")
 
-def handle_text(update: Update, context: CallbackContext):
-    text = (update.message.text or "").strip()
-    state = context.user_data.get("state")
+# -----------------------------
+#    Main function
+# -----------------------------
+async def set_webhook(app):
+    await app.bot.set_webhook(url=f"{WEBHOOK_URL}")
 
-    # ۱) اگر کاربر تازه دکمه انتخاب می‌کند
-    if text == 'ریز خرج کرد روزانه':
-        context.user_data["state"] = "waiting_expense"
-        update.message.reply_text(
-            "شرح خرج را در یک پیام بفرست.\n"
-            "فرمت پیشنهادی:\n"
-            "`350000 ریال خرید نان ملت`\n"
-            "یا حداقل: `350000 ریال خرید نان`",
-            parse_mode='Markdown'
-        )
-        return
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
 
-    # (فعلاً بقیه دکمه‌ها کاری ندارند)
-    if text in ['فروش روزانه', 'حساب باز', 'گزینه
+    # فرمان start
+    app.add_handler(CommandHandler("start", start))
+
+    # هر پیام → ارسال به N8N
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_n8n))
+
+    # تنظیم وبهوک هنگام اجرا
+    app.post_init = set_webhook
+
+    # اجرای Webhook server
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=8080,               # Railway از همین استفاده می‌کند
+        url_path="",             # خالی بگذار
+        webhook_url=WEBHOOK
