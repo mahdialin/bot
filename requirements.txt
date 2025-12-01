@@ -2,5 +2,4 @@ python-telegram-bot==20.6
 requests
 pandas
 openpyxl
-urllib3==1.26.6
 SpeechRecognition
