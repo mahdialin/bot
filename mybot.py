@@ -1,76 +1,61 @@
 import logging
-import requests
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+import requests
 
 TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
-
-# آدرس Railway بدون اسلش آخر
-RAILWAY_URL = "https://bot-production-c6bl.up.railway.app"
-
-# وب‌هوک نهایی که تلگرام باید بهش بزند
-WEBHOOK_URL = f"{RAILWAY_URL}/webhook"
+WEBHOOK_URL = "https://bot-production-c6b1.up.railway.app/webhook"   # ❗️ همین خط مهم است
 
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# -----------------------------
-#   /start command + buttons
-# -----------------------------
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         ["💸 ریز خرج کرد روزانه"],
         ["۲"],
         ["۳"],
         ["۴"],
-        ["۵"]
+        ["۵"],
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    await update.message.reply_text("لطفاً یک گزینه را انتخاب کنید:", reply_markup=reply_markup)
+    await update.message.reply_text("یکی را انتخاب کن:", reply_markup=reply_markup)
 
-# -----------------------------
-#    forward → N8N
-# -----------------------------
+
 async def forward_to_n8n(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data = {
+        "user_id": update.message.from_user.id,
+        "username": update.message.from_user.username,
+        "text": update.message.text
+    }
     try:
-        payload = {
-            "user_id": update.message.from_user.id,
-            "username": update.message.from_user.username,
-            "text": update.message.text
-        }
-
-        N8N_URL = "https://n8n-production-4e00.up.railway.app/webhook/telegram"
-
-        requests.post(N8N_URL, json=payload)
-
+        requests.post(WEBHOOK_URL, json=data)
     except Exception as e:
-        logger.error(f"Error sending to N8N: {e}")
+        logger.error(e)
 
-# -----------------------------
-#   Set Telegram Webhook
-# -----------------------------
-async def set_webhook(app):
+
+async def set_hook(app):
     await app.bot.set_webhook(WEBHOOK_URL)
 
-# -----------------------------
-#   Main
-# -----------------------------
+
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), forward_to_n8n))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_n8n))
 
-    app.post_init = set_webhook
+    app.post_init = set_hook
 
     app.run_webhook(
         listen="0.0.0.0",
         port=8080,
-        url_path="webhook"
+        url_path="webhook",
+        webhook_url=WEBHOOK_URL
     )
+
 
 if __name__ == "__main__":
     main()
