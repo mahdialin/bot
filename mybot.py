@@ -11,7 +11,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # توکن ربات تلگرام
-TOKEN = 'YOUR_BOT_TOKEN'
+TOKEN = '7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04'
 
 # دیکشنری برای ذخیره داده‌ها
 data = {
@@ -114,3 +114,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
