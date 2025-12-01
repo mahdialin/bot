@@ -1,101 +1,131 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, ContextTypes
+import logging
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+import pandas as pd
+from datetime import datetime
+from io import BytesIO  # برای ارسال فایل از حافظه
 
-# توکن ربات
-TOKEN = '7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04'  # جایگزین کنید با توکن واقعی ربات
+# تنظیمات اولیه
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# /start command handler
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # دکمه‌های اصلی
-    keyboard = [
-        [InlineKeyboardButton("💰 ریز خرج‌کرد روزانه", callback_data="expense")],
-        [InlineKeyboardButton("۲", callback_data="2")],
-        [InlineKeyboardButton("۳", callback_data="3")],
-        [InlineKeyboardButton("۴", callback_data="4")],
-        [InlineKeyboardButton("۵", callback_data="5")]
-    ]
-    
-    # ارسال دکمه‌ها
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "سلام! 👋\nلطفاً یک گزینه را انتخاب کنید:",
-        reply_markup=reply_markup
-    )
+# توکن ربات تلگرام
+TOKEN = '7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04'
 
-# تابع برای مدیریت وضعیت وقتی کاربر "💰 ریز خرج‌کرد روزانه" رو انتخاب می‌کنه
-async def expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # حذف دکمه‌های قبلی و نمایش پیام برای ارسال مبلغ
-    keyboard = []
-    reply_markup = InlineKeyboardMarkup(keyboard)
+# دیکشنری برای ذخیره داده‌ها
+data = {}
 
-    await update.message.reply_text(
-        "لطفاً مبلغ را همراه با کلمه «ریال» بفرستید (مثال: ۲۰۰۰۰ ریال).",
-        reply_markup=reply_markup
-    )
-    
-    # تغییر حالت به انتظار دریافت مبلغ
-    context.user_data['state'] = 'WAIT_EXPENSE'
+# چک کردن اینکه فایل اکسل وجود داره یا نه
+def check_excel():
+    # فقط یکبار اکسل رو چک میکنیم که اگر نیست، یه فایل جدید بسازیم
+    try:
+        df = pd.read_excel('expenses.xlsx')
+    except FileNotFoundError:
+        df = pd.DataFrame(columns=["تاریخ", "عنوان", "مبلغ (ریال)", "حساب"])
+        df.to_excel('expenses.xlsx', index=False)
 
-# تابع برای دریافت مبلغ و ارسال دکمه‌های جدید
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-
-    if context.user_data.get('state') == 'WAIT_EXPENSE':
-        # حذف ریال و دریافت مقدار عددی
-        amount_text = text.replace("ریال", "").strip()
-        try:
-            amount = int(amount_text)
-        except ValueError:
-            await update.message.reply_text("❗ مبلغ صحیح وارد نشده. لطفاً دوباره امتحان کنید.")
-            return
+# ساخت فایل اکسل در حافظه و ارسال به کاربر
+def send_excel(update: Update, context: CallbackContext):
+    df = pd.DataFrame(data)
+    # ذخیره فایل در حافظه به جای دیسک
+    with BytesIO() as excel_file:
+        df.to_excel(excel_file, index=False, engine='openpyxl')
+        excel_file.seek(0)  # تنظیم موقعیت فایل برای ارسال
+        # ارسال فایل به کاربر
+        update.message.reply_document(document=excel_file, filename="expenses.xlsx")
         
-        # بعد از دریافت مبلغ، نمایش دکمه‌های جدید
-        keyboard = [
-            [InlineKeyboardButton("خوراک", callback_data="expense_food")],
-            [InlineKeyboardButton("رفت‌وآمد", callback_data="expense_transport")],
-            [InlineKeyboardButton("خانه", callback_data="expense_home")],
-            [InlineKeyboardButton("تفریح", callback_data="expense_fun")],
-            [InlineKeyboardButton("سایر", callback_data="expense_other")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        await update.message.reply_text(
-            f"مبلغ ثبت‌شده: {amount} ریال. لطفاً نوع خرج را انتخاب کنید:",
-            reply_markup=reply_markup
-        )
-        # تغییر حالت به انتظار انتخاب نوع خرج
-        context.user_data['state'] = 'WAIT_CATEGORY'
-
-# تابع برای پردازش انتخاب نوع خرج
-async def process_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    category = query.data  # داده مربوط به دکمه کلیک شده
-
-    # ارسال تایید ثبت خرج
-    await query.answer()  # این خط برای پاسخ به کلیک روی دکمه ضروری است
-    await query.edit_message_text(
-        f"ثبت {category} به عنوان خرج انجام شد. همه چیز تمام است."
+# شروع ربات
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text(
+        "سلام! خوش آمدید. لطفاً دستور خود را وارد کنید.",
+        reply_markup=ReplyKeyboardMarkup([['ریز خرج کرد روزانه', 'پایان روز کاری']], one_time_keyboard=True)
     )
 
-    # پاک کردن دکمه‌ها
-    keyboard = []
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.message.edit_reply_markup(reply_markup=reply_markup)
+# دریافت ویس یا متن
+def handle_message(update: Update, context: CallbackContext):
+    user_message = update.message.text.lower()
 
-    # تغییر حالت به حالت اولیه
-    context.user_data['state'] = 'START'
+    if 'ریز خرج کرد روزانه' in user_message:
+        update.message.reply_text("لطفاً شرح خرج را وارد کنید (متن یا ویس).")
+    else:
+        update.message.reply_text("مقدار ورودی شناخته نشد. لطفاً دستور صحیح را وارد کنید.")
 
-# تابع اصلی
+# ذخیره و پردازش ویس
+def handle_voice(update: Update, context: CallbackContext):
+    file = update.message.voice.get_file()
+    file.download('voice_note.ogg')
+    update.message.reply_text("ویس دریافت شد. در حال پردازش ...")
+
+    # اینجا باید کد تبدیل ویس به متن اضافه بشه
+    # فرض می‌کنیم که داده‌های پردازش شده به شکل زیر هستند:
+    processed_data = "35000 ریال خرید نان ملت"
+    
+    process_expense(processed_data)
+
+# پردازش هزینه و ذخیره در اکسل
+def process_expense(data_str: str):
+    # فرض بر اینکه داده‌ها به این شکل هستند: مبلغ شرح حساب
+    try:
+        amount, description, account = data_str.split(" ")
+        amount = int(amount.replace("ریال", "").strip())
+    except ValueError:
+        return "فرمت داده‌ها اشتباه است. لطفاً دوباره وارد کنید."
+
+    # ثبت داده در دیکشنری
+    date_today = datetime.today().strftime('%Y/%m/%d')
+    if 'تاریخ' not in data:
+        data['تاریخ'] = []
+    if 'عنوان' not in data:
+        data['عنوان'] = []
+    if 'مبلغ (ریال)' not in data:
+        data['مبلغ (ریال)'] = []
+    if 'حساب' not in data:
+        data['حساب'] = []
+
+    data['تاریخ'].append(date_today)
+    data['عنوان'].append(description)
+    data['مبلغ (ریال)'].append(amount)
+    data['حساب'].append(account)
+
+    # ارسال فایل اکسل بعد از ثبت
+    send_excel(update, context)
+
+    # ارسال پیام تایید
+    return f"ثبت شد!\nعنوان: {description}\nمبلغ: {amount} ریال\nحساب: {account}\nتاریخ: {date_today}"
+
+# دستور پایان روز
+def end_day(update: Update, context: CallbackContext):
+    # جمع‌زدن داده‌ها از اکسل
+    df = pd.DataFrame(data)
+    total = df['مبلغ (ریال)'].sum()
+
+    # ثبت جمع کل در اکسل
+    df = df.append({
+        'تاریخ': 'پایان روز',
+        'عنوان': 'جمع کل',
+        'مبلغ (ریال)': total,
+        'حساب': 'تمام حساب‌ها'
+    }, ignore_index=True)
+
+    send_excel(update, context)
+
+    update.message.reply_text(f"پایان روز کاری! جمع کل خرج‌ها: {total} ریال.")
+
+# اجرای ربات
 def main():
-    app = ApplicationBuilder().token(TOKEN).build()
+    check_excel()
 
-    # ثبت handlerها
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(expense, pattern="^expense$"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(CallbackQueryHandler(process_expense, pattern="^(expense_food|expense_transport|expense_home|expense_fun|expense_other)$"))
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-    app.run_polling()
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+    dp.add_handler(MessageHandler(Filters.voice, handle_voice))
+    dp.add_handler(CommandHandler("end_day", end_day))
 
-if __name__ == "__main__":
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
     main()
