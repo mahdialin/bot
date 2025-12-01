@@ -3,7 +3,7 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 import pandas as pd
 from datetime import datetime
-from io import BytesIO  # برای ارسال فایل از حافظه
+from io import BytesIO
 
 # تنظیمات اولیه
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -11,118 +11,103 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # توکن ربات تلگرام
-TOKEN = '7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04'
+TOKEN = 'YOUR_BOT_TOKEN'
 
 # دیکشنری برای ذخیره داده‌ها
-data = {}
+data = {
+    "تاریخ": [],
+    "عنوان": [],
+    "مبلغ (ریال)": [],
+    "حساب": []
+}
 
-# چک کردن اینکه فایل اکسل وجود داره یا نه
-def check_excel():
-    # فقط یکبار اکسل رو چک میکنیم که اگر نیست، یه فایل جدید بسازیم
-    try:
-        df = pd.read_excel('expenses.xlsx')
-    except FileNotFoundError:
-        df = pd.DataFrame(columns=["تاریخ", "عنوان", "مبلغ (ریال)", "حساب"])
-        df.to_excel('expenses.xlsx', index=False)
-
-# ساخت فایل اکسل در حافظه و ارسال به کاربر
-def send_excel(update: Update, context: CallbackContext):
+# ذخیره داده‌ها در اکسل
+def save_to_excel():
     df = pd.DataFrame(data)
-    # ذخیره فایل در حافظه به جای دیسک
     with BytesIO() as excel_file:
         df.to_excel(excel_file, index=False, engine='openpyxl')
-        excel_file.seek(0)  # تنظیم موقعیت فایل برای ارسال
-        # ارسال فایل به کاربر
-        update.message.reply_document(document=excel_file, filename="expenses.xlsx")
-        
-# شروع ربات
+        excel_file.seek(0)
+        return excel_file
+
+# شروع ربات و نمایش دکمه‌ها
 def start(update: Update, context: CallbackContext):
+    keyboard = [
+        ['ریز خرج کرد روزانه'],
+        ['فروش روزانه'],
+        ['حساب باز'],
+        ['دکمه ۴'],
+        ['دکمه ۵']
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
     update.message.reply_text(
-        "سلام! خوش آمدید. لطفاً دستور خود را وارد کنید.",
-        reply_markup=ReplyKeyboardMarkup([['ریز خرج کرد روزانه', 'پایان روز کاری']], one_time_keyboard=True)
+        "سلام! انتخاب کنید:",
+        reply_markup=reply_markup
     )
 
-# دریافت ویس یا متن
+# دریافت اطلاعات شرح و مبلغ
 def handle_message(update: Update, context: CallbackContext):
     user_message = update.message.text.lower()
 
     if 'ریز خرج کرد روزانه' in user_message:
-        update.message.reply_text("لطفاً شرح خرج را وارد کنید (متن یا ویس).")
+        update.message.reply_text("لطفاً شرح خرج و مبلغ را ارسال کنید (فرمت: مبلغ شرح خرج).")
     else:
-        update.message.reply_text("مقدار ورودی شناخته نشد. لطفاً دستور صحیح را وارد کنید.")
+        update.message.reply_text("لطفاً یکی از دکمه‌ها را انتخاب کنید.")
 
-# ذخیره و پردازش ویس
-def handle_voice(update: Update, context: CallbackContext):
-    file = update.message.voice.get_file()
-    file.download('voice_note.ogg')
-    update.message.reply_text("ویس دریافت شد. در حال پردازش ...")
-
-    # اینجا باید کد تبدیل ویس به متن اضافه بشه
-    # فرض می‌کنیم که داده‌های پردازش شده به شکل زیر هستند:
-    processed_data = "35000 ریال خرید نان ملت"
-    
-    process_expense(processed_data)
-
-# پردازش هزینه و ذخیره در اکسل
-def process_expense(data_str: str):
-    # فرض بر اینکه داده‌ها به این شکل هستند: مبلغ شرح حساب
+# پردازش و ذخیره اطلاعات در دیکشنری
+def handle_expense(update: Update, context: CallbackContext):
+    user_message = update.message.text
     try:
-        amount, description, account = data_str.split(" ")
+        # فرض بر این است که ورودی به شکل زیر است: "35000 ریال خرید نان"
+        amount, description = user_message.split(" ", 1)
         amount = int(amount.replace("ریال", "").strip())
+
+        # ذخیره در دیکشنری
+        date_today = datetime.today().strftime('%Y/%m/%d')
+        data["تاریخ"].append(date_today)
+        data["عنوان"].append(description)
+        data["مبلغ (ریال)"].append(amount)
+        data["حساب"].append("ملت")  # می‌توانید حساب را به صورت داینامیک از کاربر بگیرید
+
+        # نمایش دکمه برای انتخاب عنوان خرج
+        keyboard = [['اسنپ'], ['حقوق'], ['خرید نان'], ['خرید ماشین'], ['سایر']]
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+        update.message.reply_text("عنوان خرج را انتخاب کنید:", reply_markup=reply_markup)
+
     except ValueError:
-        return "فرمت داده‌ها اشتباه است. لطفاً دوباره وارد کنید."
+        update.message.reply_text("فرمت داده‌ها اشتباه است. لطفاً دوباره وارد کنید.")
 
-    # ثبت داده در دیکشنری
-    date_today = datetime.today().strftime('%Y/%m/%d')
-    if 'تاریخ' not in data:
-        data['تاریخ'] = []
-    if 'عنوان' not in data:
-        data['عنوان'] = []
-    if 'مبلغ (ریال)' not in data:
-        data['مبلغ (ریال)'] = []
-    if 'حساب' not in data:
-        data['حساب'] = []
+# ذخیره عنوان انتخابی و ارسال فایل اکسل
+def handle_title(update: Update, context: CallbackContext):
+    title = update.message.text
+    data["عنوان"][-1] = title  # عنوان انتخاب شده به آخرین ردیف اضافه می‌شود
 
-    data['تاریخ'].append(date_today)
-    data['عنوان'].append(description)
-    data['مبلغ (ریال)'].append(amount)
-    data['حساب'].append(account)
-
-    # ارسال فایل اکسل بعد از ثبت
-    send_excel(update, context)
+    # ارسال فایل اکسل به کاربر
+    excel_file = save_to_excel()
+    update.message.reply_document(document=excel_file, filename="expenses.xlsx")
 
     # ارسال پیام تایید
-    return f"ثبت شد!\nعنوان: {description}\nمبلغ: {amount} ریال\nحساب: {account}\nتاریخ: {date_today}"
+    update.message.reply_text(f"ثبت شد! عنوان: {title}.")
 
-# دستور پایان روز
-def end_day(update: Update, context: CallbackContext):
-    # جمع‌زدن داده‌ها از اکسل
-    df = pd.DataFrame(data)
-    total = df['مبلغ (ریال)'].sum()
-
-    # ثبت جمع کل در اکسل
-    df = df.append({
-        'تاریخ': 'پایان روز',
-        'عنوان': 'جمع کل',
-        'مبلغ (ریال)': total,
-        'حساب': 'تمام حساب‌ها'
-    }, ignore_index=True)
-
-    send_excel(update, context)
-
-    update.message.reply_text(f"پایان روز کاری! جمع کل خرج‌ها: {total} ریال.")
+    # نمایش مجدد دکمه‌ها
+    keyboard = [
+        ['ریز خرج کرد روزانه'],
+        ['فروش روزانه'],
+        ['حساب باز'],
+        ['دکمه ۴'],
+        ['دکمه ۵']
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+    update.message.reply_text("انتخاب کنید:", reply_markup=reply_markup)
 
 # اجرای ربات
 def main():
-    check_excel()
-
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
-    dp.add_handler(MessageHandler(Filters.voice, handle_voice))
-    dp.add_handler(CommandHandler("end_day", end_day))
+    dp.add_handler(MessageHandler(Filters.text, handle_expense))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_title))
 
     updater.start_polling()
     updater.idle()
