@@ -1,122 +1,105 @@
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-import os
-import re
+import logging
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, MessageHandler, filters, CallbackContext
+import pandas as pd
+from datetime import datetime
+from io import BytesIO
 
-BOT_TOKEN = os.environ.get("7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04")
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL")  # از Railway میاره
+# تنظیمات اولیه
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# توکن ربات تلگرام
+TOKEN = 'اینجا_توکن_خودت'
+
+# دیکشنری برای ذخیره داده‌ها
+data = {
+    "تاریخ": [],
+    "عنوان": [],
+    "مبلغ (ریال)": [],
+    "حساب": []
+}
+
+def save_to_excel():
+    df = pd.DataFrame(data)
+    with BytesIO() as excel_file:
+        df.to_excel(excel_file, index=False, engine='openpyxl')
+        excel_file.seek(0)
+        return excel_file
 
 def start(update: Update, context: CallbackContext):
     keyboard = [
-        ["💰 ریز خرج‌کرد روزانه"],
-        ["فروش روزانه", "حقوق"],
-        ["برداشت", "موجوی صندوق"]
+        ['ریز خرج کرد روزانه'],
+        ['فروش روزانه'],
+        ['حساب باز'],
+        ['دکمه ۴'],
+        ['دکمه ۵']
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    update.message.reply_text("یک گزینه را انتخاب کنید:", reply_markup=reply_markup)
-
-def convert_fa_numbers(text):
-    fa = "۰۱۲۳۴۵۶۷۸۹"
-    en = "0123456789"
-    table = str.maketrans(fa, en)
-    return text.translate(table)
+    update.message.reply_text("سلام! لطفاً یک گزینه را انتخاب کنید:", reply_markup=reply_markup)
 
 def handle_message(update: Update, context: CallbackContext):
     text = update.message.text
 
-    # اگر وارد حالت ریز خرج‌کرد شدیم
-    if context.user_data.get("state") == "WAIT_EXPENSE":
+    if text == "ریز خرج کرد روزانه":
+        update.message.reply_text("لطفاً شرح خرج را ارسال کنید.\n(فرمت: مبلغ ریال شرح...)")
+        context.user_data["waiting_expense"] = True
+    else:
+        update.message.reply_text("لطفاً یکی از دکمه‌ها را انتخاب کنید.")
 
-        raw = convert_fa_numbers(text)
-
-        # 1) مبلغ تا قبل از کلمه "ریال"
-        if "ریال" not in raw:
-            update.message.reply_text("❗ لطفاً مبلغ را همراه کلمه «ریال» بفرست.")
-            return
-
-        parts = raw.split("ریال")
-        amount_text = parts[0].strip()
-        after_amount = parts[1].strip()
-
-        # مبلغ را از پیام جدا کنیم (فقط عدد)
-        amount_numbers = re.findall(r"\d+", amount_text)
-        if not amount_numbers:
-            update.message.reply_text("❗ مبلغ درست تشخیص داده نشد.")
-            return
-
-        amount = int(amount_numbers[0])
-
-        # 2) حساب و عنوان
-        words = after_amount.split()
-
-        if len(words) < 2:
-            update.message.reply_text("❗ لطفاً بعد از مبلغ، عنوان و حساب را هم بفرست.")
-            return
-
-        if len(words) >= 3:
-            account = " ".join(words[-2:])
-            title = " ".join(words[:-2])
-        else:
-            account = words[-1]
-            title = " ".join(words[:-1])
-
-        # پیام به کاربر
-        update.message.reply_text(
-            f"✔ ثبت شد\n\n"
-            f"مبلغ: {amount}\n"
-            f"عنوان: {title}\n"
-            f"حساب: {account}",
-            reply_markup=ReplyKeyboardRemove()
-        )
-
-        # ------------------------------
-        # ارسال داده‌ها به n8n (Webhook)
-        # ------------------------------
-        import requests
-        webhook_url = os.environ.get("N8N_WEBHOOK_URL")
-
-        try:
-            requests.post(webhook_url, json={
-                "amount": amount,
-                "title": title,
-                "account": account
-            })
-        except Exception as e:
-            print("❗ خطا در ارسال به n8n:", e)
-
-        # پاک کردن state
-        context.user_data.clear()
+def handle_expense(update: Update, context: CallbackContext):
+    if not context.user_data.get("waiting_expense"):
         return
 
-    # وقتی روی دکمه ریز خرج‌کرد کلیک میشه
-    if text == "💰 ریز خرج‌کرد روزانه":
-        context.user_data["state"] = "WAIT_EXPENSE"
-        update.message.reply_text(
-            "لطفاً مبلغ + ریال + عنوان + حساب را بفرست یا ویس بده.\n"
-            "مثال: «۲۰۰۰۰ ریال اسنپ ملت مهدی»",
-            reply_markup=ReplyKeyboardRemove()
-        )
+    msg = update.message.text
+
+    try:
+        amount = msg.split("ریال")[0].strip()
+        description = msg.split("ریال")[1].strip()
+        amount = int(amount)
+
+        date_today = datetime.today().strftime("%Y/%m/%d")
+
+        data["تاریخ"].append(date_today)
+        data["عنوان"].append(description)
+        data["مبلغ (ریال)"].append(amount)
+        data["حساب"].append("نامشخص")
+
+        keyboard = [['اسنپ'], ['حقوق'], ['خرید'], ['کالا'], ['سایر']]
+        update.message.reply_text("عنوان خرج را انتخاب کنید:", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
+
+        context.user_data["waiting_expense"] = False
+        context.user_data["waiting_title"] = True
+
+    except:
+        update.message.reply_text("فرمت ورودی اشتباه است. مثال:\n\n350000 ریال خرید نان")
+
+def handle_title(update: Update, context: CallbackContext):
+    if not context.user_data.get("waiting_title"):
         return
+
+    title = update.message.text
+    data["عنوان"][-1] = title
+
+    excel = save_to_excel()
+    update.message.reply_document(excel, filename="report.xlsx")
+
+    update.message.reply_text("ثبت شد ✔️")
+
+    context.user_data["waiting_title"] = False
 
 def main():
-    bot_token = os.environ.get("BOT_TOKEN")
-    webhook_url = os.environ.get("N8N_WEBHOOK_URL")
-
-    updater = Updater(bot_token, use_context=True)
+    updater = Updater(TOKEN)
     dp = updater.dispatcher
-    
+
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+    dp.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    dp.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_expense))
+    dp.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_title))
 
-    updater.start_webhook(
-        listen="0.0.0.0",
-        port=8080,
-        url_path="webhook",
-        webhook_url=webhook_url
-    )
-
+    updater.start_polling()
     updater.idle()
 
 if __name__ == "__main__":
     main()
-
