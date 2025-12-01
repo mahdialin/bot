@@ -7,13 +7,9 @@ from telegram.ext import (
     MessageHandler,
     filters
 )
-from fastapi import FastAPI
-from telegram import Update
-from telegram.request import HTTPXRequest
 
-# --------------------- تنظیمات ---------------------
 TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
-WEBHOOK_URL = "https://bot-production-c6b1.up.railway.app/webhook"
+WEBHOOK_URL = "https://bot-production-c6b1.up.railway.app/webhook"   # توجه: اسلش آخر ندارد
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -21,8 +17,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --------------------- دکمه‌ها ---------------------
-main_keyboard = ReplyKeyboardMarkup(
+
+# ------------------ دکمه‌ها ------------------
+keyboard = ReplyKeyboardMarkup(
     [
         ["💸 ریز خرج کرد روزانه"],
         ["📊 گزارش هفتگی"],
@@ -33,40 +30,39 @@ main_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
+
+# ------------------ start ------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("یکی از گزینه‌های زیر را انتخاب کنید:", reply_markup=main_keyboard)
+    await update.message.reply_text("یکی را انتخاب کنید:", reply_markup=keyboard)
 
-async def forward_to_n8n(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message.text
-    await update.message.reply_text(f"پیام دریافت شد:\n{msg}")
 
-# --------------------- FastAPI برای وب‌هوک ---------------------
-app = FastAPI()
+# ------------------ message ------------------
+async def forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(f"پیام دریافت شد: {update.message.text}")
 
-@app.post("/webhook")
-async def webhook(update_dict: dict):
-    update = Update.de_json(update_dict, application.bot)
-    await application.process_update(update)
-    return {"ok": True}
 
-# --------------------- اجرای برنامه ---------------------
-async def main():
-    global application
+# ------------------ main ------------------
+async def set_hook(app):
+    await app.bot.set_webhook(WEBHOOK_URL)
 
-    req = HTTPXRequest(connection_pool_size=8)
-    application = ApplicationBuilder().token(TOKEN).request(req).build()
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_n8n))
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
 
-    # ست وب‌هوک
-    await application.bot.set_webhook(url=WEBHOOK_URL)
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward))
 
-    # اجرای FastAPI
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # ست کردن وب‌هوک
+    app.post_init = set_hook
+
+    # اجرا روی Railway
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=8000,
+        url_path="webhook",
+        webhook_url=WEBHOOK_URL
+    )
 
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
