@@ -3,7 +3,7 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 import os
 
-TOKEN = os.getenv("TOKEN")
+TOKEN = os.getenv("bot7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 logging.basicConfig(level=logging.INFO)
@@ -38,3 +38,4 @@ async def main():
 if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
+
