@@ -4,8 +4,7 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
 TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
-WEBHOOK_URL = "https://bot-production-c6bl.up.railway.app/webhook"
-N8N_URL = "https://n8n-production-4e00.up.railway.app/webhook/telegram"
+WEBHOOK_URL = "https://bot-production-c6bl.up.railway.app"   # بدون /webhook
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -13,7 +12,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# /start
+# -----------------------------
+#   /start command + buttons
+# -----------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         ["💸 ریز خرج کرد روزانه"],
@@ -30,7 +31,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# forward message to N8N
+# -----------------------------
+#   Send every message to N8N
+# -----------------------------
 async def forward_to_n8n(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         payload = {
@@ -39,27 +42,39 @@ async def forward_to_n8n(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "text": update.message.text,
         }
 
-        requests.post(N8N_URL, json=payload)
+        # ارسال داده به N8N
+        requests.post(
+            "https://n8n-production-4e00.up.railway.app/webhook/telegram",
+            json=payload
+        )
 
     except Exception as e:
         logger.error(f"Error sending to N8N: {e}")
 
-# set Telegram webhook
+
+# -----------------------------
+#    Main function
+# -----------------------------
 async def set_webhook(app):
-    await app.bot.set_webhook(WEBHOOK_URL)
+    await app.bot.set_webhook(url=WEBHOOK_URL)
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
+    # فرمان start
     app.add_handler(CommandHandler("start", start))
+
+    # هر پیام → ارسال به N8N
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_n8n))
 
+    # تنظیم وبهوک هنگام اجرا
     app.post_init = set_webhook
 
+    # اجرای Webhook server
     app.run_webhook(
         listen="0.0.0.0",
         port=8080,
-        url_path="webhook"
+        url_path=""               # مهم — خالی بگذار
     )
 
 if __name__ == "__main__":
