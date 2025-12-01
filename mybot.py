@@ -1,19 +1,17 @@
 import logging
 import requests
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
-
-# ---------------------------------------------------
-#   تنظیمات اصلی
-# ---------------------------------------------------
+from telegram.ext import (
+    ApplicationBuilder,
+    ContextTypes,
+    CommandHandler,
+    MessageHandler,
+    filters,
+)
 
 TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
+WEBHOOK_URL = "https://bot-production-c6bl.up.railway.app/webhook"
 
-# آدرس Webhook صحیح Railway (بدون اسلش اضافه)
-BOT_WEBHOOK = "https://bot-production-c6bl.up.railway.app/webhook"
-
-# آدرس Webhook نود n8n
-N8N_WEBHOOK = "https://n8n-production-4e00.up.railway.app/webhook/telegram"
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -22,9 +20,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------
-#   دکمه‌های اصلی ربات
-# ---------------------------------------------------
+# ---------------------
+#  /start
+# ---------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         ["💸 ریز خرج کرد روزانه"],
@@ -33,7 +31,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ["۴"],
         ["۵"]
     ]
-
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
     await update.message.reply_text(
@@ -42,41 +39,47 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# ---------------------------------------------------
-#   ارسال همه پیام‌ها به n8n
-# ---------------------------------------------------
+# ---------------------
+#  Forward to N8N
+# ---------------------
 async def forward_to_n8n(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    payload = {
+        "user_id": update.message.from_user.id,
+        "username": update.message.from_user.username,
+        "text": update.message.text,
+    }
+
     try:
-        data = {
-            "user_id": update.message.from_user.id,
-            "username": update.message.from_user.username,
-            "text": update.message.text
-        }
-
-        requests.post(N8N_WEBHOOK, json=data)
-
+        requests.post(WEBHOOK_URL, json=payload)
     except Exception as e:
-        logger.error(f"خطا در ارسال به n8n: {e}")
+        logger.error(f"N8N ERROR: {e}")
 
 
-# ---------------------------------------------------
-#   تنظیم وبهوک تلگرام
-# ---------------------------------------------------
+# ---------------------
+#  Set Telegram Webhook
+# ---------------------
 async def set_webhook(app):
-    await app.bot.set_webhook(url=BOT_WEBHOOK)
-    print("🚀 Webhook Telegram Set!")
+    await app.bot.set_webhook(WEBHOOK_URL)
 
 
-# ---------------------------------------------------
-#   اجرای ربات روی Railway
-# ---------------------------------------------------
+# ---------------------
+#  Main
+# ---------------------
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # فرمان /start
     app.add_handler(CommandHandler("start", start))
-
-    # همه پیام‌ها → به n8n
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_n8n))
 
-    # ست کردن وبهو
+    app.post_init = set_webhook
+
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=8080,
+        url_path="webhook",
+        webhook_url=WEBHOOK_URL
+    )
+
+
+if __name__ == "__main__":
+    main()
