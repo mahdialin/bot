@@ -1,54 +1,48 @@
 import logging
-import requests
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
-
-TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
-WEBHOOK_URL = "https://bot-production-c6b1.up.railway.app/webhook"
-
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters
 )
+
+import os
+
+TOKEN = os.getenv("TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        ["💸 ریز خرج کرد روزانه"],
-        ["۲"], ["۳"], ["۴"], ["۵"]
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    await update.message.reply_text("لطفاً یک گزینه را انتخاب کنید:", reply_markup=reply_markup)
+    keyboard = [["👋 سلام"], ["❓ کمک"]]
+    await update.message.reply_text(
+        "ربات فعال شد!",
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    )
 
-async def forward_to_n8n(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        payload = {
-            "user_id": update.message.from_user.id,
-            "username": update.message.from_user.username,
-            "text": update.message.text,
-        }
-        requests.post("https://n8n-production-4e00.up.railway.app/webhook/telegram", json=payload)
 
-    except Exception as e:
-        logger.error(f"Error sending to N8N: {e}")
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("پیام دریافت شد")
 
-async def post_init(app):
-    await app.bot.set_webhook(WEBHOOK_URL)
 
 def main():
-    app = ApplicationBuilder().token(TOKEN).build()
+    app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_n8n))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
-    app.post_init = post_init
-
+    # Webhook start
     app.run_webhook(
         listen="0.0.0.0",
         port=8080,
         url_path="webhook",
-        webhook_url=WEBHOOK_URL
+        webhook_url=f"{WEBHOOK_URL}"
     )
+
 
 if __name__ == "__main__":
     main()
