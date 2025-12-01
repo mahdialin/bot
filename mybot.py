@@ -72,14 +72,14 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_n8n))
 
     app.post_init = set_webhook
-
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=8080,
-        url_path="webhook",
-        webhook_url=WEBHOOK_URL
-    )
+app.run_webhook(
+    listen="0.0.0.0",
+    port=8080,
+    url_path="webhook",
+    webhook_url=WEBHOOK_URL
+)
 
 
 if __name__ == "__main__":
     main()
+
