@@ -3,8 +3,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 import os
 import re
 
-BOT_TOKEN = os.environ.get("7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04
-")
+BOT_TOKEN = os.environ.get("7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04")
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")  # از Railway میاره
 
 def start(update: Update, context: CallbackContext):
@@ -120,3 +119,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
