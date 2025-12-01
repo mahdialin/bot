@@ -7,16 +7,17 @@ from telegram.ext import (
     MessageHandler,
     filters
 )
+import os
 
 TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
-WEBHOOK_URL = "https://bot-production-c6b1.up.railway.app/webhook"   # توجه: اسلش آخر ندارد
+WEBHOOK_BASE = "https://bot-production-c6b1.up.railway.app"   # بدون /webhook
+WEBHOOK_URL = f"{WEBHOOK_BASE}/webhook"
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
 
 # ------------------ دکمه‌ها ------------------
 keyboard = ReplyKeyboardMarkup(
@@ -30,39 +31,35 @@ keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-
 # ------------------ start ------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("یکی را انتخاب کنید:", reply_markup=keyboard)
-
 
 # ------------------ message ------------------
 async def forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"پیام دریافت شد: {update.message.text}")
 
-
 # ------------------ main ------------------
-async def set_hook(app):
+async def post_init(app):
     await app.bot.set_webhook(WEBHOOK_URL)
 
-
 def main():
+    PORT = int(os.getenv("PORT", "8080"))  # ✔ مطابق Railway
+
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward))
 
-    # ست کردن وب‌هوک
-    app.post_init = set_hook
+    app.post_init = post_init  # ✔ فقط یک بار وب‌هوک ست می‌شود
 
-    # اجرا روی Railway
+    # ✔ پورت درست  
     app.run_webhook(
         listen="0.0.0.0",
-        port=8000,
+        port=PORT,
         url_path="webhook",
         webhook_url=WEBHOOK_URL
     )
-
 
 if __name__ == "__main__":
     main()
