@@ -6,9 +6,10 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 # ---------------------------------------------------
 #   تنظیمات اصلی
 # ---------------------------------------------------
+
 TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
 
-# آدرس Webhook ربات روی Railway
+# آدرس Webhook صحیح Railway (بدون اسلش اضافه)
 BOT_WEBHOOK = "https://bot-production-c6bl.up.railway.app/webhook"
 
 # آدرس Webhook نود n8n
@@ -18,7 +19,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
-
 logger = logging.getLogger(__name__)
 
 
@@ -76,20 +76,7 @@ def main():
     # فرمان /start
     app.add_handler(CommandHandler("start", start))
 
-    # هر متن → بره به n8n
+    # همه پیام‌ها → به n8n
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_n8n))
 
-    # ست کردن webhook بعد از اجرا
-    app.post_init = set_webhook
-
-    # اجرای سرور webhook — مهم برای Railway
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=8080,
-        url_path="webhook",
-        webhook_url=BOT_WEBHOOK
-    )
-
-
-if __name__ == "__main__":
-    main()
+    # ست کردن وبهو
