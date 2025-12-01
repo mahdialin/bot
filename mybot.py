@@ -1,116 +1,122 @@
-import logging
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-import pandas as pd
-from datetime import datetime
-from io import BytesIO
+import os
+import re
 
-# تنظیمات اولیه
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
+BOT_TOKEN = os.environ.get("7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04
+")
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL")  # از Railway میاره
 
-# توکن ربات تلگرام
-TOKEN = 'YOUR_BOT_TOKEN'
-
-# دیکشنری برای ذخیره داده‌ها
-data = {
-    "تاریخ": [],
-    "عنوان": [],
-    "مبلغ (ریال)": [],
-    "حساب": []
-}
-
-# ذخیره داده‌ها در اکسل
-def save_to_excel():
-    df = pd.DataFrame(data)
-    with BytesIO() as excel_file:
-        df.to_excel(excel_file, index=False, engine='openpyxl')
-        excel_file.seek(0)
-        return excel_file
-
-# شروع ربات و نمایش دکمه‌ها
 def start(update: Update, context: CallbackContext):
     keyboard = [
-        ['ریز خرج کرد روزانه'],
-        ['فروش روزانه'],
-        ['حساب باز'],
-        ['دکمه ۴'],
-        ['دکمه ۵']
+        ["💰 ریز خرج‌کرد روزانه"],
+        ["فروش روزانه", "حقوق"],
+        ["برداشت", "موجوی صندوق"]
     ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
-    update.message.reply_text(
-        "سلام! انتخاب کنید:",
-        reply_markup=reply_markup
-    )
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    update.message.reply_text("یک گزینه را انتخاب کنید:", reply_markup=reply_markup)
 
-# دریافت اطلاعات شرح و مبلغ
+def convert_fa_numbers(text):
+    fa = "۰۱۲۳۴۵۶۷۸۹"
+    en = "0123456789"
+    table = str.maketrans(fa, en)
+    return text.translate(table)
+
 def handle_message(update: Update, context: CallbackContext):
-    user_message = update.message.text.lower()
+    text = update.message.text
 
-    if 'ریز خرج کرد روزانه' in user_message:
-        update.message.reply_text("لطفاً شرح خرج و مبلغ را ارسال کنید (فرمت: مبلغ شرح خرج).")
-    else:
-        update.message.reply_text("لطفاً یکی از دکمه‌ها را انتخاب کنید.")
+    # اگر وارد حالت ریز خرج‌کرد شدیم
+    if context.user_data.get("state") == "WAIT_EXPENSE":
 
-# پردازش و ذخیره اطلاعات در دیکشنری
-def handle_expense(update: Update, context: CallbackContext):
-    user_message = update.message.text
-    try:
-        # فرض بر این است که ورودی به شکل زیر است: "35000 ریال خرید نان"
-        amount, description = user_message.split(" ", 1)
-        amount = int(amount.replace("ریال", "").strip())
+        raw = convert_fa_numbers(text)
 
-        # ذخیره در دیکشنری
-        date_today = datetime.today().strftime('%Y/%m/%d')
-        data["تاریخ"].append(date_today)
-        data["عنوان"].append(description)
-        data["مبلغ (ریال)"].append(amount)
-        data["حساب"].append("ملت")  # می‌توانید حساب را به صورت داینامیک از کاربر بگیرید
+        # 1) مبلغ تا قبل از کلمه "ریال"
+        if "ریال" not in raw:
+            update.message.reply_text("❗ لطفاً مبلغ را همراه کلمه «ریال» بفرست.")
+            return
 
-        # نمایش دکمه برای انتخاب عنوان خرج
-        keyboard = [['اسنپ'], ['حقوق'], ['خرید نان'], ['خرید ماشین'], ['سایر']]
-        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
-        update.message.reply_text("عنوان خرج را انتخاب کنید:", reply_markup=reply_markup)
+        parts = raw.split("ریال")
+        amount_text = parts[0].strip()
+        after_amount = parts[1].strip()
 
-    except ValueError:
-        update.message.reply_text("فرمت داده‌ها اشتباه است. لطفاً دوباره وارد کنید.")
+        # مبلغ را از پیام جدا کنیم (فقط عدد)
+        amount_numbers = re.findall(r"\d+", amount_text)
+        if not amount_numbers:
+            update.message.reply_text("❗ مبلغ درست تشخیص داده نشد.")
+            return
 
-# ذخیره عنوان انتخابی و ارسال فایل اکسل
-def handle_title(update: Update, context: CallbackContext):
-    title = update.message.text
-    data["عنوان"][-1] = title  # عنوان انتخاب شده به آخرین ردیف اضافه می‌شود
+        amount = int(amount_numbers[0])
 
-    # ارسال فایل اکسل به کاربر
-    excel_file = save_to_excel()
-    update.message.reply_document(document=excel_file, filename="expenses.xlsx")
+        # 2) حساب و عنوان
+        words = after_amount.split()
 
-    # ارسال پیام تایید
-    update.message.reply_text(f"ثبت شد! عنوان: {title}.")
+        if len(words) < 2:
+            update.message.reply_text("❗ لطفاً بعد از مبلغ، عنوان و حساب را هم بفرست.")
+            return
 
-    # نمایش مجدد دکمه‌ها
-    keyboard = [
-        ['ریز خرج کرد روزانه'],
-        ['فروش روزانه'],
-        ['حساب باز'],
-        ['دکمه ۴'],
-        ['دکمه ۵']
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
-    update.message.reply_text("انتخاب کنید:", reply_markup=reply_markup)
+        if len(words) >= 3:
+            account = " ".join(words[-2:])
+            title = " ".join(words[:-2])
+        else:
+            account = words[-1]
+            title = " ".join(words[:-1])
 
-# اجرای ربات
+        # پیام به کاربر
+        update.message.reply_text(
+            f"✔ ثبت شد\n\n"
+            f"مبلغ: {amount}\n"
+            f"عنوان: {title}\n"
+            f"حساب: {account}",
+            reply_markup=ReplyKeyboardRemove()
+        )
+
+        # ------------------------------
+        # ارسال داده‌ها به n8n (Webhook)
+        # ------------------------------
+        import requests
+        webhook_url = os.environ.get("N8N_WEBHOOK_URL")
+
+        try:
+            requests.post(webhook_url, json={
+                "amount": amount,
+                "title": title,
+                "account": account
+            })
+        except Exception as e:
+            print("❗ خطا در ارسال به n8n:", e)
+
+        # پاک کردن state
+        context.user_data.clear()
+        return
+
+    # وقتی روی دکمه ریز خرج‌کرد کلیک میشه
+    if text == "💰 ریز خرج‌کرد روزانه":
+        context.user_data["state"] = "WAIT_EXPENSE"
+        update.message.reply_text(
+            "لطفاً مبلغ + ریال + عنوان + حساب را بفرست یا ویس بده.\n"
+            "مثال: «۲۰۰۰۰ ریال اسنپ ملت مهدی»",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return
+
 def main():
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
+    bot_token = os.environ.get("BOT_TOKEN")
+    webhook_url = os.environ.get("N8N_WEBHOOK_URL")
 
+    updater = Updater(bot_token, use_context=True)
+    dp = updater.dispatcher
+    
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
-    dp.add_handler(MessageHandler(Filters.text, handle_expense))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_title))
 
-    updater.start_polling()
+    updater.start_webhook(
+        listen="0.0.0.0",
+        port=8080,
+        url_path="webhook",
+        webhook_url=webhook_url
+    )
+
     updater.idle()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
