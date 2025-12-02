@@ -197,6 +197,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------- هندلر ویس (نسخه کامل) ----------
+# ---------- هندلر ویس (نسخه کامل) ----------
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     info = get_user_info(update)
     voice = update.message.voice
@@ -229,7 +230,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "لطفاً عنوان/دسته‌ی این خرج را انتخاب کن:",
         reply_markup=CATEGORY_KEYBOARD,
-    )-
+    )
 async def post_init(app):
     await app.bot.set_webhook(WEBHOOK_URL)
 
@@ -253,5 +254,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
