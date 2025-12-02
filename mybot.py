@@ -221,10 +221,15 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
     send_to_n8n(payload)
 
+    # ارسال متن ویس به کاربر
     await update.message.reply_text(f"🎙 متن ویس:\n{text}")
 
-
-# ---------- راه‌اندازی اپ ----------
+    # بعد از ارسال ویس، دکمه‌های انتخاب دسته‌بندی ارسال می‌شود
+    context.user_data["state"] = "await_category"  # انتقال به مرحله انتخاب دسته‌بندی بعد از ارسال ویس
+    await update.message.reply_text(
+        "لطفاً عنوان/دسته‌ی این خرج را انتخاب کن:",
+        reply_markup=CATEGORY_KEYBOARD,
+    )-
 async def post_init(app):
     await app.bot.set_webhook(WEBHOOK_URL)
 
@@ -248,4 +253,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
