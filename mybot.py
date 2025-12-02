@@ -10,6 +10,12 @@ from telegram.ext import (
     filters,
 )
 
+# ---------- اضافه شده برای OpenAI ----------
+from openai import OpenAI
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# -------------------------------------------
+
+
 # ---------- تنظیمات ----------
 TOKEN = "7773555006:AAEFzzZ8ZzDyJ02ZnQw2y3Ya4b5jEJGZs04"
 
@@ -72,9 +78,22 @@ def get_user_info(update: Update):
     }
 
 
+# ---------- تابع جدید: تبدیل ویس به متن ----------
+async def transcribe_voice(file_path):
+    try:
+        with open(file_path, "rb") as f:
+            transcript = client.audio.transcriptions.create(
+                model="gpt-4o-mini-tts",   # مدل whisper کوچک
+                file=f
+            )
+        return transcript.text
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        return None
+
+
 # ---------- هندلر /start ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # پاک کردن وضعیت قبلی کاربر
     context.user_data.clear()
 
     await update.message.reply_text(
@@ -87,36 +106,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (update.message.text or "").strip()
     state = context.user_data.get("state")
-
-    # برای راحتی
     info = get_user_info(update)
 
-    # ---- مرحله ۱: کلیک روی "ریز خرج کرد روزانه" ----
+    # ---- مرحله ۱
     if text == "💸 ریز خرج کرد روزانه" and state is None:
         context.user_data["state"] = "await_expense_text"
 
         await update.message.reply_text(
             "مبلغ + شرح + حساب را در *یک پیام* ارسال کنید.\n"
             "مثال:\n"
-            "`250000 ریال ناهار ملت`\n\n"
-            "اگر در چند پیام جدا بفرستید، ثبت نمی‌شود.",
+            "`250000 ریال ناهار ملت`",
             reply_markup=MAIN_KEYBOARD,
             parse_mode="Markdown",
         )
         return
 
-    # ---- مرحله ۲: دریافت فرمت «مبلغ ریال شرح حساب» ----
+    # ---- مرحله ۲
     if state == "await_expense_text":
         if "ریال" not in text:
             await update.message.reply_text(
                 "فرمت اشتباه است ❌\n"
-                "لطفاً دقیقاً مثل مثال بفرست:\n"
                 "`250000 ریال ناهار ملت`",
                 parse_mode="Markdown",
             )
             return
 
-        # اینجا فعلاً پارس دقیق را می‌سپاریم به n8n
         payload = {
             "step": "expense_raw",
             "flow": "daily_expense",
@@ -125,7 +139,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         send_to_n8n(payload)
 
-        # رفتن به مرحله انتخاب دسته‌بندی
         context.user_data["state"] = "await_category"
 
         await update.message.reply_text(
@@ -134,41 +147,34 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # ---- مرحله ۳: انتخاب دسته‌بندی 1 تا 4 یا "مورد خاص" ----
+    # ---- مرحله ۳
     if state == "await_category":
         if text in ["1", "2", "3", "4"]:
             payload = {
                 "step": "expense_category",
                 "flow": "daily_expense",
-                "category": text,       # 1 یا 2 یا 3 یا 4
+                "category": text,
                 "is_custom": False,
                 **info,
             }
             send_to_n8n(payload)
 
-            # پایان فرایند
             context.user_data.clear()
             await update.message.reply_text(
-                "اطلاعات ثبت شد و تمام ✔",
+                "اطلاعات ثبت شد ✔",
                 reply_markup=MAIN_KEYBOARD,
             )
             return
 
         if text == "مورد خاص":
             context.user_data["state"] = "await_custom_title"
-            await update.message.reply_text(
-                "عنوان مورد خاص را بنویس (مثلاً: کپسول آتش‌نشانی):",
-            )
+            await update.message.reply_text("عنوان مورد خاص را بنویس:")
             return
 
-        # اگر چیز دیگری فرستاد
-        await update.message.reply_text(
-            "لطفاً یکی از دکمه‌ها را انتخاب کن.",
-            reply_markup=CATEGORY_KEYBOARD,
-        )
+        await update.message.reply_text("یکی از دکمه‌ها را انتخاب کن.", reply_markup=CATEGORY_KEYBOARD)
         return
 
-    # ---- مرحله ۴: دریافت عنوان برای «مورد خاص» ----
+    # ---- مرحله ۴
     if state == "await_custom_title":
         custom_title = text
 
@@ -183,43 +189,43 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         send_to_n8n(payload)
 
         context.user_data.clear()
-        await update.message.reply_text(
-            "اطلاعات ثبت شد و تمام ✔",
-            reply_markup=MAIN_KEYBOARD,
-        )
+        await update.message.reply_text("اطلاعات ثبت شد ✔", reply_markup=MAIN_KEYBOARD)
         return
 
-    # ---- خارج از فرایند (حالت عادی) ----
-    # می‌تونیم اینجا هرچی خواستی بزنی، فعلاً فقط راهنمایی می‌کنیم
-    await update.message.reply_text(
-        "برای ثبت خرج روی «💸 ریز خرج کرد روزانه» بزن.",
-        reply_markup=MAIN_KEYBOARD,
-    )
+    # ---- حالت عادی
+    await update.message.reply_text("برای ثبت خرج روی دکمه بزن.", reply_markup=MAIN_KEYBOARD)
 
 
-# (اختیاری) هندلر ویس → فقط فوروارد به n8n (برای آینده)
+# ---------- هندلر ویس (نسخه کامل) ----------
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     info = get_user_info(update)
     voice = update.message.voice
+
+    if not voice:
+        return
+
     file_id = voice.file_id
+    file = await context.bot.get_file(file_id)
+    file_path = "voice.ogg"
+    await file.download_to_drive(file_path)
+
+    # تبدیل صدا → متن
+    text = await transcribe_voice(file_path)
 
     payload = {
         "step": "voice",
         "flow": "daily_expense",
         "file_id": file_id,
+        "text": text,
         **info,
     }
     send_to_n8n(payload)
 
-    await update.message.reply_text(
-        "ویس ارسال شد 🎙\n"
-        "فعلاً لطفاً متن را هم به صورت تایپ‌شده بفرست تا ثبت شود.",
-    )
+    await update.message.reply_text(f"🎙 متن ویس:\n{text}")
 
 
 # ---------- راه‌اندازی اپ ----------
 async def post_init(app):
-    # ست کردن وبهوک در تلگرام
     await app.bot.set_webhook(WEBHOOK_URL)
 
 
