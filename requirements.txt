@@ -4,3 +4,4 @@ pandas
 openpyxl
 SpeechRecognition
 openai
+axios
